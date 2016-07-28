@@ -1,0 +1,47 @@
+#!/usr/bin/env perl
+
+use v5.10;
+
+use Paws;
+use Data::Dumper;
+
+my $bucket = $ARGV[0];
+
+my $s3 = Paws->service('S3', region => 'eu-west-1');
+
+if (not defined $bucket) {
+  my $list = $s3->ListBuckets;
+  print Dumper($list);
+} else {
+  my $tree = {};
+  my $token;
+  do {
+    my $res = $s3->ListObjectsV2(
+      Bucket => $bucket,
+      (defined $token) ? (ContinuationToken => $token) : (),
+    );
+
+    process_elements($tree, $res->Contents);
+
+    if ($res->IsTruncated) {
+      $token = $res->NextContinuationToken;
+    } else {
+      $token = undef;
+    }
+  } until (not defined $token);
+
+  print Dumper($tree);
+}
+
+sub process_elements {
+  my ($tree, $objects) = @_;
+  process_key($tree, $_->Key, $_->Size) for @$objects;
+}
+
+sub process_key {
+  my ($tree, $key, $size) = @_;
+
+  my @path = split /\//, $key, 2;
+  $tree->{ $path[0] }->{ _size } += $size;
+  process_key($tree->{ $path[0] }, $path[1], $size) if (defined $path[1]);
+} 
