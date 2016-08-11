@@ -1,5 +1,7 @@
 #!/usr/bin/env perl
 
+use strict;
+use warnings;
 use v5.10;
 
 use Paws;
@@ -35,13 +37,19 @@ if (not defined $bucket) {
 
 sub process_elements {
   my ($tree, $objects) = @_;
-  process_key($tree, $_->Key, $_->Size) for @$objects;
+
+  for my $file (@$objects) {
+    my $size = $file->Size;
+    my @path = split /\//, $file->Key;
+    pop @path; # take the file name out...
+    while (@path) {
+      my $partial_path = join '/', @path;
+
+      $tree->{ $partial_path }->{ _size }  += $size;
+      $tree->{ $partial_path }->{ _count } += 1;
+
+      pop @path;
+    }
+  }
 }
 
-sub process_key {
-  my ($tree, $key, $size) = @_;
-
-  my @path = split /\//, $key, 2;
-  $tree->{ $path[0] }->{ _size } += $size;
-  process_key($tree->{ $path[0] }, $path[1], $size) if (defined $path[1]);
-} 
