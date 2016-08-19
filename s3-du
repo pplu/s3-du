@@ -7,9 +7,13 @@ use v5.10;
 use Paws;
 use Data::Dumper;
 
+use HTTPTinyResponseRecorder;
+
 my $bucket = $ARGV[0];
 
-my $s3 = Paws->service('S3', region => 'eu-west-1');
+my $s3 = Paws->service('S3', region => 'eu-west-1', caller => HTTPTinyResponseRecorder->new);
+
+my $price = 0.03;
 
 if (not defined $bucket) {
   my $list = $s3->ListBuckets;
@@ -40,15 +44,25 @@ sub process_elements {
 
   for my $file (@$objects) {
     my $size = $file->Size;
+
     my @path = split /\//, $file->Key;
-    pop @path; # take the file name out...
-    while (@path) {
-      my $partial_path = join '/', @path;
 
-      $tree->{ $partial_path }->{ _size }  += $size;
-      $tree->{ $partial_path }->{ _count } += 1;
+    my $t = $tree;
+    while (@path >= 2) {
+      $t->{ children }->{ $path[0] } = {} if (not defined $t->{ children }->{ $path[0] });
+      $t = $t->{ children }->{ $path[0] };
 
-      pop @path;
+      if (@path == 2) {
+        $t->{ _file_size  } += $size;
+        $t->{ _file_count } += 1;
+        $t->{ _file_price } += ($size * 0.03) / (1024 * 1024 * 1024);
+      } else {
+        $t->{ _children_size  } += $size;
+        $t->{ _children_count } += 1;
+        $t->{ _children_price } += ($size * 0.03) / (1024 * 1024 * 1024);
+      }
+
+      shift @path;
     }
   }
 }
